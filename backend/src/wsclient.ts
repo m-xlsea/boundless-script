@@ -120,6 +120,9 @@ export class WsClient {
     return battleSteps;
   }
   formatLogs() {
+    if (this.logs.length > 20) {
+      this.logs.splice(0, this.logs.length - 20);
+    }
     return this.logs;
   }
   stopBattleFnc() {

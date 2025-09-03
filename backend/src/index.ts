@@ -100,7 +100,7 @@ const app = new Elysia()
       } else if (event === "battlelog") {
         const username = wsUserMap.get(ws.id);
         if (username) {
-          console.log("请求战斗日志:", username);
+          //console.log("请求战斗日志:", username);
           const user = UserInfo.get(username);
 
           if (user) {
@@ -162,11 +162,16 @@ const app = new Elysia()
       pattern: "0 * * * * *",
       async run() {
         console.log("检查是否需要重新连接ws");
-        const findUsefulWs = Array.from(UserInfo.values()).find((ws) => ws.status === "offline" && !ws.stopBattle);
-        if (findUsefulWs) {
-          findUsefulWs.logs.push(new Date().toLocaleString() + " " + findUsefulWs.username + "重新连接ws");
-          findUsefulWs.connect();
-        } else {
+        const offlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "offline" && !ws.stopBattle);
+
+        offlineUsers.forEach(async (ws) => {
+          ws.logs.push(new Date().toLocaleString() + " " + ws.username + "重新连接ws");
+          ws.connect();
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        });
+
+        if (offlineUsers.length > 0) {
+          console.log(`重新连接了 ${offlineUsers.length} 个离线用户`);
         }
       },
     })
