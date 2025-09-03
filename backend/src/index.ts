@@ -181,6 +181,33 @@ const app = new Elysia()
       },
     })
   )
+  .use(
+    cron({
+      name: "battleHeartbeat",
+      pattern: "*/15 * * * * *",
+      async run() {
+        /*
+        42["battleHeartbeat",{"challengeId":"worldboss_68b84c0ddc0ddf9e075bc27f_68b54dd0e97bf8d707b0e528_1756908669089","battleType":"worldboss","clientTimestamp":1756908671789,"connectionQuality":"good"}]
+        */
+        const onlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "online");
+        onlineUsers.forEach((ws) => {
+          ws.send(`42["battleHeartbeat",{"challengeId":"${BOSSinfo.challengeId}","battleType":"worldboss","clientTimestamp":${new Date().getTime()},"connectionQuality":"good"}]`);
+        });
+      },
+    })
+  )
+  .use(
+    cron({
+      name: "resendBattleStart",
+      pattern: "*/30 * * * * *",
+      async run() {
+        const onlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "online");
+        onlineUsers.forEach((ws) => {
+          ws.joinBattle();
+        });
+      },
+    })
+  )
   .listen(3333);
 
 console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
