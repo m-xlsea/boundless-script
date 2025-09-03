@@ -147,11 +147,16 @@ const app = new Elysia()
         } else {
           return;
         }
-        const findUsefulWs = Array.from(UserInfo.values()).find((ws) => ws.status === "online");
-        if (findUsefulWs) {
-          findUsefulWs.joinBattle();
+        const onlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "online");
+
+        onlineUsers.forEach((ws) => {
+          ws.joinBattle();
+        });
+
+        if (onlineUsers.length > 0) {
+          console.log(`${onlineUsers.length} 个在线用户加入了战斗`);
         } else {
-          console.log("没有找到在线的ws");
+          console.log("没有找到在线的用户");
         }
       },
     })
@@ -161,7 +166,7 @@ const app = new Elysia()
       name: "reconnectWs",
       pattern: "0 * * * * *",
       async run() {
-        console.log("检查是否需要重新连接ws");
+        //console.log("检查是否需要重新连接ws");
         const offlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "offline" && !ws.stopBattle);
 
         offlineUsers.forEach(async (ws) => {
@@ -176,6 +181,6 @@ const app = new Elysia()
       },
     })
   )
-  .listen(3000);
+  .listen(3333);
 
 console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);

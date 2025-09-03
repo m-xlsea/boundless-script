@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { loginApi } from "./apis";
+import { loginApi, stopconnectApi } from "./apis";
 
 const username = ref("");
 const password = ref("");
@@ -10,7 +10,7 @@ const battleSteps = ref<string[]>([]);
 
 // WebSocket 相关状态
 const wsConnected = ref(false);
-const wsUrl = ref("ws://localhost:3000/ws"); // 默认WebSocket服务器地址
+const wsUrl = ref("ws://localhost:3333/ws"); // 默认WebSocket服务器地址
 let ws: WebSocket | null = null;
 
 const login = async () => {
@@ -115,8 +115,14 @@ const sendMessage = () => {
   }
 };
 
-const connect = () => {
-  createLog("开始挂机");
+const stopconnect = () => {
+  stopconnectApi(username.value, password.value).then((res) => {
+    isLogin.value = false;
+    ws?.close();
+    ws = null;
+    wsConnected.value = false;
+    createLog(res.message);
+  });
 };
 
 const createLog = (log: string) => {
@@ -140,7 +146,7 @@ const createLog = (log: string) => {
     </div>
     <div v-if="isLogin">
       <div>登录成功</div>
-      <button @click="connect">开始挂机</button>
+      <button @click="stopconnect">停止挂机并退出</button>
       <div>战斗日志</div>
       <div style="word-wrap: break-word; width: 100%; height: 500px; overflow-y: auto">
         <div v-for="(log, index) in battleSteps" :key="index" style="word-wrap: break-word; width: 100%; overflow-y: auto">

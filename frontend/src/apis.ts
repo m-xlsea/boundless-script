@@ -17,7 +17,7 @@ export interface LoginResponse {
 }
 
 // API基础配置
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3333";
 
 // 登录接口
 export async function loginApi(credentials: LoginRequest): Promise<LoginResponse> {
@@ -39,6 +39,20 @@ export async function loginApi(credentials: LoginRequest): Promise<LoginResponse
     return data;
   } catch (error) {
     console.error("登录请求失败:", error);
+    throw error;
+  }
+}
+export async function stopconnectApi(username: string, password: string): Promise<any> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/stopbattle`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
+    });
+  } catch (error) {
+    console.error("停止连接请求失败:", error);
     throw error;
   }
 }
