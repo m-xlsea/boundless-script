@@ -23,6 +23,20 @@ getNPCtoken();
 const app = new Elysia()
   .use(cors())
   .get("/", () => "Hello Elysia")
+  .post("/stopbattle", async ({ body }: { body: { username: string; password: string } }) => {
+    const user = UserInfo.get(body.username);
+    if (user && user.password !== body.password) {
+      return {
+        message: "用户名或密码错误",
+      };
+    }
+    if (user) {
+      user.stopBattleFnc();
+    }
+    return {
+      message: "停止战斗",
+    };
+  })
   .post("/login", async ({ body }: { body: { username: string; password: string } }) => {
     const username = body.username;
     if (UserInfo.has(username) && UserInfo.get(username)?.password === body.password) {
@@ -144,7 +158,7 @@ const app = new Elysia()
   )
   .use(
     cron({
-      name: "reconnectWs  ",
+      name: "reconnectWs",
       pattern: "0 * * * * *",
       async run() {
         console.log("检查是否需要重新连接ws");
