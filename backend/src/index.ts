@@ -176,11 +176,13 @@ const app = new Elysia()
               message: res.error,
             };
           }
+
           ws.token = res.token;
           ws.wsAuth = `40{"token":"${res.token}"}`;
           ws.username = ws.username;
           ws.password = ws.password;
           ws.logs.push(new Date().toLocaleString() + " " + ws.username + "重新连接ws");
+          ws.status = "online";
           ws.connect();
           await new Promise((resolve) => setTimeout(resolve, 2000));
         });
