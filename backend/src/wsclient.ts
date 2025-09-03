@@ -2,7 +2,7 @@ import { leaderboard, parseSocketIoEvent } from "./globalData";
 import { BOSSinfo } from "./globalData";
 export class WsClient {
   private readonly url: string;
-  private ws: WebSocket | null = null;
+  ws: WebSocket | null = null;
   token: string;
   wsAuth: string;
   username: string;

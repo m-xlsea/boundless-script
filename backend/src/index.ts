@@ -166,10 +166,20 @@ const app = new Elysia()
       name: "reconnectWs",
       pattern: "0 * * * * *",
       async run() {
-        //console.log("检查是否需要重新连接ws");
+        console.log("检查是否需要重新连接ws");
         const offlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "offline" && !ws.stopBattle);
 
         offlineUsers.forEach(async (ws) => {
+          const res = (await post("https://boundless.wenzi.games/api/auth/login", { username: ws.username, password: ws.password })) as any;
+          if (res.error) {
+            return {
+              message: res.error,
+            };
+          }
+          ws.token = res.token;
+          ws.wsAuth = `40{"token":"${res.token}"}`;
+          ws.username = ws.username;
+          ws.password = ws.password;
           ws.logs.push(new Date().toLocaleString() + " " + ws.username + "重新连接ws");
           ws.connect();
           await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -208,6 +218,7 @@ const app = new Elysia()
       },
     })
   )
+
   .listen(3333);
 
 console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
