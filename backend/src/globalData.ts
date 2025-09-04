@@ -1,6 +1,5 @@
-import { WsClient } from "./wsclient";
-
-export const UserInfo = new Map<string, WsClient>();
+import { WSConnectionManager } from "./wsConnectionManager";
+import { UserDataService } from "./userDataService";
 export const BOSSinfo = {
   worldBossId: "",
   challengeId: "",
@@ -25,7 +24,7 @@ export function parseSocketIoEvent(msg: string): { event: string; data: any } | 
   }
 }
 const findBossAndJoin = (bossId: string) => {
-  const findUsefulWs = Array.from(UserInfo.values()).find((ws) => ws.status === "online");
+  const findUsefulWs = WSConnectionManager.findConnectionByStatus("online");
   if (findUsefulWs) {
     findUsefulWs.send(`42["startWorldBossBattle",{"worldBossId":"${bossId}","challengeId":"${BOSSinfo.challengeId}"}]`);
   }

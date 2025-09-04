@@ -1,28 +1,17 @@
 import { leaderboard, parseSocketIoEvent, getTime } from "./globalData";
 import { BOSSinfo } from "./globalData";
+import { UserDataService } from "./userDataService";
+
 export class WsClient {
   private readonly url: string;
   ws: WebSocket | null = null;
-  token: string;
-  wsAuth: string;
-  username: string;
-  password: string;
+  userId: string;
   status: string;
-  battleSteps: object[];
-  logs: string[];
-  stopBattle: boolean;
 
-  constructor(token: string, username: string, password: string, status: string) {
+  constructor(userId: string, token: string) {
     this.url = "wss://boundless.wenzi.games/socket.io/?EIO=4&transport=websocket";
-    // 默认空回调，便于可选传入
-    this.token = token;
-    this.wsAuth = `40{"token":"${token}"}`;
-    this.username = username;
-    this.password = password;
-    this.status = status;
-    this.battleSteps = [];
-    this.logs = [];
-    this.stopBattle = false;
+    this.userId = userId;
+    this.status = "offline";
   }
 
   connect() {
@@ -42,22 +31,29 @@ export class WsClient {
     this.ws = null;
   }
 
-  private createConnection() {
+  private async createConnection() {
     try {
+      const userData = await UserDataService.getUserData(this.userId);
+      if (!userData) {
+        console.error("用户数据不存在");
+        return;
+      }
+
       const ws = new WebSocket(this.url);
       this.ws = ws;
 
-      ws.onopen = () => {
-        this.stopBattle = false;
-        this.send(this.wsAuth);
-        //console.log("open");
-        this.logs.push(getTime() + " " + this.username + "上线了");
+      ws.onopen = async () => {
+        await UserDataService.setStopBattle(this.userId, false);
+        this.send(`40{"token":"${userData.token}"}`);
+        this.status = "online";
+        await UserDataService.updateUserStatus(this.userId, "online");
+        await UserDataService.addLog(this.userId, getTime() + " " + userData.username + "上线了");
         setTimeout(() => {
           this.joinBattle();
         }, 1000);
       };
 
-      ws.onmessage = (ev) => {
+      ws.onmessage = async (ev) => {
         if (ev.data == "2") {
           this.send("3");
         }
@@ -68,17 +64,12 @@ export class WsClient {
               // 根据新的数据结构进行赋值
               BOSSinfo.bossCurrentHp = event.data.currentHp;
               BOSSinfo.bossTotalHp = event.data.maxHp;
-              BOSSinfo.worldBossId = event.data.bossId;
+
               // 其余字段如有需要可继续补充
               break;
             case "worldBossBattleStep":
               event.data.time = getTime();
-              this.battleSteps.push(event.data);
-              // 仅保留最新 20 条
-              if (this.battleSteps.length > 20) {
-                this.battleSteps.splice(0, this.battleSteps.length - 20);
-              }
-
+              await UserDataService.addBattleStep(this.userId, event.data);
               break;
             case "worldBossLeaderboardUpdate":
               leaderboard.leaderboard = event.data;
@@ -91,10 +82,14 @@ export class WsClient {
         }
       };
 
-      ws.onclose = (ev) => {
-        console.log(getTime(), this.username, "掉线了", ev);
-        this.logs.push(getTime() + " " + this.username + "掉线了");
+      ws.onclose = async (ev) => {
+        const userData = await UserDataService.getUserData(this.userId);
+        if (userData) {
+          console.log(getTime(), userData.username, "掉线了", ev);
+          await UserDataService.addLog(this.userId, getTime() + " " + userData.username + "掉线了");
+        }
         this.status = "offline";
+        await UserDataService.updateUserStatus(this.userId, "offline");
       };
 
       ws.onerror = (err) => {
@@ -102,16 +97,22 @@ export class WsClient {
       };
     } catch (err) {}
   }
-  joinBattle() {
+  async joinBattle() {
     this.send(`42["startWorldBossBattle",{"worldBossId":"${BOSSinfo.worldBossId}","challengeId":"${BOSSinfo.challengeId}"}]`);
-    console.log(getTime(), this.username, "准备进入世界boss战斗:", BOSSinfo.bossName);
-    this.logs.push(getTime() + " " + this.username + "准备进入世界boss战斗:" + BOSSinfo.bossName);
+    const userData = await UserDataService.getUserData(this.userId);
+    if (userData) {
+      console.log(getTime(), userData.username, "准备进入世界boss战斗:", BOSSinfo.bossName);
+      await UserDataService.addLog(this.userId, getTime() + " " + userData.username + "准备进入世界boss战斗:" + BOSSinfo.bossName);
+    }
   }
-  formatBattleSteps() {
-    const battleSteps = this.battleSteps.map((step: any) => {
+  async formatBattleSteps() {
+    const userData = await UserDataService.getUserData(this.userId);
+    if (!userData) return [];
+
+    const battleSteps = userData.battleSteps.map((step: any) => {
       const temp = {
         time: step.time,
-        username: this.username,
+        username: userData.username,
         conditionalEffects: step.conditionalEffects ? step.conditionalEffects.map((effect: any) => effect.name) : [],
         damage: step.damage,
         cHP: step.currentEnemyHP,
@@ -125,14 +126,12 @@ export class WsClient {
     });
     return battleSteps;
   }
-  formatLogs() {
-    if (this.logs.length > 20) {
-      this.logs.splice(0, this.logs.length - 20);
-    }
-    return this.logs;
+  async formatLogs() {
+    const userData = await UserDataService.getUserData(this.userId);
+    return userData ? userData.logs : [];
   }
-  stopBattleFnc() {
-    this.stopBattle = true;
+  async stopBattleFnc() {
+    await UserDataService.setStopBattle(this.userId, true);
     this.ws?.close();
     return {
       message: "停止战斗",

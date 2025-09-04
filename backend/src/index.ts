@@ -1,7 +1,10 @@
 import { Elysia } from "elysia";
 import { WsClient } from "./wsclient";
 import { get, post } from "./httptool";
-import { BOSSinfo, UserInfo, getTime } from "./globalData";
+import { BOSSinfo, getTime } from "./globalData";
+import { UserDataService } from "./userDataService";
+import { WSConnectionManager } from "./wsConnectionManager";
+import { StartupService } from "./startupService";
 import cors from "@elysiajs/cors";
 import cron from "@elysiajs/cron";
 
@@ -11,7 +14,7 @@ const wsUserMap = new Map<any, string>();
 
 const getNPCtoken = async () => {
   try {
-    const res = (await post("https://boundless.wenzi.games/api/auth/login", { username: "andiliba2", password: "zsm85887823" })) as any;
+    const res = (await post("https://boundless.wenzi.games/api/auth/login", { username: "andiliba1", password: "zsm85887823" })) as any;
     if (res.error) {
       console.log("获取NPC token失败:", res.error);
       return {
@@ -24,46 +27,104 @@ const getNPCtoken = async () => {
     console.log("获取NPC token异常:", error);
   }
 };
-getNPCtoken();
+
+// 启动时初始化
+const initializeServer = async () => {
+  console.log("🚀 服务器启动中...");
+
+  // 1. 获取NPC token
+  await getNPCtoken();
+
+  // 2. 恢复Redis中的用户数据
+  await StartupService.recoverUsersFromRedis();
+
+  // 3. 清理无效数据（可选）
+  await StartupService.cleanupInvalidData();
+
+  // 4. 显示恢复统计
+  const stats = await StartupService.getRecoveryStats();
+  console.log("📊 恢复统计:");
+  console.log(`   - 总用户数: ${stats.totalUsers}`);
+  console.log(`   - 在线用户: ${stats.onlineUsers}`);
+  console.log(`   - 离线用户: ${stats.offlineUsers}`);
+  console.log(`   - 活跃连接: ${stats.activeConnections}`);
+
+  console.log("✅ 服务器初始化完成");
+};
 // 简单的 Elysia HTTP + WS 服务器
 const app = new Elysia()
   .use(cors())
   .get("/", () => "Hello Elysia")
+  .get("/status", async () => {
+    const stats = await StartupService.getRecoveryStats();
+    return {
+      message: "服务器运行正常",
+      stats: {
+        totalUsers: stats.totalUsers,
+        onlineUsers: stats.onlineUsers,
+        offlineUsers: stats.offlineUsers,
+        activeConnections: stats.activeConnections,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  })
   .post("/stopbattle", async ({ body }: { body: { username: string; password: string } }) => {
-    const user = UserInfo.get(body.username);
-    if (user && user.password !== body.password) {
+    const userData = await UserDataService.getUserData(body.username);
+    if (!userData) {
+      return {
+        message: "用户不存在",
+      };
+    }
+
+    if (userData.password !== body.password) {
       return {
         message: "用户名或密码错误",
       };
     }
-    if (user) {
-      user.stopBattleFnc();
+
+    const wsConnection = WSConnectionManager.getConnection(body.username);
+    if (wsConnection) {
+      await wsConnection.stopBattleFnc();
     }
+
     return {
       message: "停止战斗",
     };
   })
   .post("/login", async ({ body }: { body: { username: string; password: string } }) => {
+    if (!body.username || !body.password) {
+      return {
+        message: "用户名或密码不能为空",
+      };
+    }
     const username = body.username;
-    if (UserInfo.has(username) && UserInfo.get(username)?.password === body.password) {
-      const user = UserInfo.get(username);
-      if (user?.status === "online") {
+    const existingUserData = await UserDataService.getUserData(username);
+    const existingConnection = WSConnectionManager.getConnection(username);
+
+    // 如果用户数据存在且密码匹配
+    if (existingUserData && existingUserData.password === body.password) {
+      if (existingUserData.status === "online" && existingConnection) {
         return {
           message: "用户已登录",
         };
-      } else if (user?.status === "offline") {
+      } else {
+        // 用户离线，重新登录
         const res = (await post("https://boundless.wenzi.games/api/auth/login", body)) as any;
         if (res.error) {
           return {
             message: res.error,
           };
         }
-        user.token = res.token;
-        user.wsAuth = `40{"token":"${res.token}"}`;
-        user.username = body.username;
-        user.password = body.password;
-        user.status = "online";
-        user.connect();
+
+        // 更新用户数据中的token
+        existingUserData.token = res.token;
+        existingUserData.status = "online";
+        await UserDataService.saveUserData(username, existingUserData);
+
+        // 创建新的WebSocket连接
+        const wsClient = new WsClient(username, res.token);
+        WSConnectionManager.addConnection(username, wsClient);
+        wsClient.connect();
 
         return {
           message: "用户已登录",
@@ -71,6 +132,7 @@ const app = new Elysia()
       }
     }
 
+    // 新用户登录
     const res = (await post("https://boundless.wenzi.games/api/auth/login", body)) as any;
 
     if (res.error) {
@@ -78,9 +140,23 @@ const app = new Elysia()
         message: res.error,
       };
     }
-    const user = new WsClient(res.token, body.username, body.password, "online");
-    UserInfo.set(body.username, user);
-    user.connect();
+
+    // 保存用户数据到Redis
+    const userData = {
+      token: res.token,
+      username: body.username,
+      password: body.password,
+      status: "online",
+      battleSteps: [],
+      logs: [],
+      stopBattle: false,
+    };
+    await UserDataService.saveUserData(username, userData);
+
+    // 创建WebSocket连接
+    const wsClient = new WsClient(username, res.token);
+    WSConnectionManager.addConnection(username, wsClient);
+    wsClient.connect();
 
     return {
       message: "登录成功",
@@ -91,12 +167,12 @@ const app = new Elysia()
     open: (ws) => {
       console.log("ws open", "server");
     },
-    message: (ws, message: any) => {
+    message: async (ws, message: any) => {
       const event = message.event;
       const data = message.data;
       if (event === "connect") {
-        const user = UserInfo.get(data.username);
-        if (user && user.password !== data.password) {
+        const userData = await UserDataService.getUserData(data.username);
+        if (!userData || userData.password !== data.password) {
           ws.close();
           return;
         }
@@ -107,18 +183,20 @@ const app = new Elysia()
         const username = wsUserMap.get(ws.id);
         if (username) {
           //console.log("请求战斗日志:", username);
-          const user = UserInfo.get(username);
+          const wsConnection = WSConnectionManager.getConnection(username);
 
-          if (user) {
-            ws.send(JSON.stringify({ event: "battlelog", data: user.formatBattleSteps() }));
+          if (wsConnection) {
+            const battleSteps = await wsConnection.formatBattleSteps();
+            ws.send(JSON.stringify({ event: "battlelog", data: battleSteps }));
           }
         }
       } else if (event === "log") {
         const username = wsUserMap.get(ws.id);
         if (username) {
-          const user = UserInfo.get(username);
-          if (user) {
-            ws.send(JSON.stringify({ event: "log", data: user.formatLogs() }));
+          const wsConnection = WSConnectionManager.getConnection(username);
+          if (wsConnection) {
+            const logs = await wsConnection.formatLogs();
+            ws.send(JSON.stringify({ event: "log", data: logs }));
           }
         }
       }
@@ -137,10 +215,11 @@ const app = new Elysia()
   .use(
     cron({
       name: "refreshBossId",
-      pattern: "*/5 * * * * *",
+      pattern: "*/1 * * * * *",
       async run() {
         try {
           const res: any = await get("https://boundless.wenzi.games/api/worldboss/current", { Authorization: "Bearer " + NPCtoken });
+
           if (res.boss != null && res.boss._id != BOSSinfo.worldBossId) {
             BOSSinfo.worldBossId = res.boss._id;
             console.log("更换boss", BOSSinfo.worldBossId);
@@ -155,20 +234,28 @@ const app = new Elysia()
           } else {
             return;
           }
-          const onlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "online");
+          const onlineUserIds = await UserDataService.getOnlineUsers();
+          let onlineConnections = 0;
 
-          onlineUsers.forEach((ws) => {
-            ws.joinBattle();
-          });
+          for (const userId of onlineUserIds) {
+            const wsConnection = WSConnectionManager.getConnection(userId);
+            if (wsConnection) {
+              await wsConnection.joinBattle();
+              onlineConnections++;
+            }
+          }
 
-          if (onlineUsers.length > 0) {
-            console.log(`${onlineUsers.length} 个在线用户加入了战斗`);
+          if (onlineConnections > 0) {
+            console.log(`${onlineConnections} 个在线用户加入了战斗`);
           } else {
             console.log("没有找到在线的用户");
           }
         } catch (error) {
           console.log("error");
           console.log(error);
+          setTimeout(() => {
+            getNPCtoken();
+          }, 10000);
         }
       },
     })
@@ -180,31 +267,51 @@ const app = new Elysia()
       async run() {
         try {
           console.log("检查是否需要重新连接ws");
-          const offlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "offline" && !ws.stopBattle);
+          const allUserIds = await UserDataService.getAllUserIds();
+          let reconnectedCount = 0;
 
-          offlineUsers.forEach(async (ws) => {
+          for (const userId of allUserIds) {
+            const userData = await UserDataService.getUserData(userId);
+            if (!userData || userData.status !== "offline" || userData.stopBattle) {
+              continue;
+            }
+
+            const existingConnection = WSConnectionManager.getConnection(userId);
+            if (existingConnection) {
+              continue; // 已经有连接了
+            }
+
             try {
-              const res = (await post("https://boundless.wenzi.games/api/auth/login", { username: ws.username, password: ws.password })) as any;
+              const res = (await post("https://boundless.wenzi.games/api/auth/login", {
+                username: userData.username,
+                password: userData.password,
+              })) as any;
+
               if (res.error) {
-                console.log(`用户 ${ws.username} 重新登录失败:`, res.error);
-                return;
+                console.log(`用户 ${userData.username} 重新登录失败:`, res.error);
+                continue;
               }
 
-              ws.token = res.token;
-              ws.wsAuth = `40{"token":"${res.token}"}`;
-              ws.username = ws.username;
-              ws.password = ws.password;
-              ws.logs.push(getTime() + " " + ws.username + "重新连接ws");
-              ws.status = "online";
-              ws.connect();
+              // 更新用户数据
+              userData.token = res.token;
+              userData.status = "online";
+              await UserDataService.saveUserData(userId, userData);
+              await UserDataService.addLog(userId, getTime() + " " + userData.username + "重新连接ws");
+
+              // 创建新的WebSocket连接
+              const wsClient = new WsClient(userId, res.token);
+              WSConnectionManager.addConnection(userId, wsClient);
+              wsClient.connect();
+
+              reconnectedCount++;
               await new Promise((resolve) => setTimeout(resolve, 2000));
             } catch (error) {
-              console.log(`用户 ${ws.username} 重新连接异常:`, error);
+              console.log(`用户 ${userData.username} 重新连接异常:`, error);
             }
-          });
+          }
 
-          if (offlineUsers.length > 0) {
-            console.log(`重新连接了 ${offlineUsers.length} 个离线用户`);
+          if (reconnectedCount > 0) {
+            console.log(`重新连接了 ${reconnectedCount} 个离线用户`);
           }
         } catch (error) {
           console.log("重连任务异常:", error);
@@ -221,9 +328,12 @@ const app = new Elysia()
           /*
            42["battleHeartbeat",{"challengeId":"worldboss_68b84c0ddc0ddf9e075bc27f_68b54dd0e97bf8d707b0e528_1756908669089","battleType":"worldboss","clientTimestamp":1756908671789,"connectionQuality":"good"}]
            */
-          const onlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "online");
-          onlineUsers.forEach((ws) => {
-            ws.send(`42["battleHeartbeat",{"challengeId":"${BOSSinfo.challengeId}","battleType":"worldboss","clientTimestamp":${new Date().getTime()},"connectionQuality":"good"}]`);
+          const onlineUserIds = await UserDataService.getOnlineUsers();
+          onlineUserIds.forEach((userId) => {
+            const wsConnection = WSConnectionManager.getConnection(userId);
+            if (wsConnection) {
+              wsConnection.send(`42["battleHeartbeat",{"challengeId":"${BOSSinfo.challengeId}","battleType":"worldboss","clientTimestamp":${new Date().getTime()},"connectionQuality":"good"}]`);
+            }
           });
         } catch (error) {
           console.log("心跳任务异常:", error);
@@ -237,9 +347,12 @@ const app = new Elysia()
       pattern: "*/30 * * * * *",
       async run() {
         try {
-          const onlineUsers = Array.from(UserInfo.values()).filter((ws) => ws.status === "online");
-          onlineUsers.forEach((ws) => {
-            ws.joinBattle();
+          const onlineUserIds = await UserDataService.getOnlineUsers();
+          onlineUserIds.forEach(async (userId) => {
+            const wsConnection = WSConnectionManager.getConnection(userId);
+            if (wsConnection) {
+              await wsConnection.joinBattle();
+            }
           });
         } catch (error) {
           console.log("重发战斗任务异常:", error);
@@ -250,4 +363,13 @@ const app = new Elysia()
 
   .listen(3333);
 
-console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+// 启动服务器并初始化
+(async () => {
+  try {
+    await initializeServer();
+    console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+  } catch (error) {
+    console.error("❌ 服务器启动失败:", error);
+    process.exit(1);
+  }
+})();
