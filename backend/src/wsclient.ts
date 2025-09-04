@@ -1,4 +1,4 @@
-import { leaderboard, parseSocketIoEvent } from "./globalData";
+import { leaderboard, parseSocketIoEvent, getTime } from "./globalData";
 import { BOSSinfo } from "./globalData";
 export class WsClient {
   private readonly url: string;
@@ -51,7 +51,7 @@ export class WsClient {
         this.stopBattle = false;
         this.send(this.wsAuth);
         //console.log("open");
-        this.logs.push(new Date().toLocaleString() + " " + this.username + "上线了");
+        this.logs.push(getTime() + " " + this.username + "上线了");
         setTimeout(() => {
           this.joinBattle();
         }, 1000);
@@ -72,7 +72,7 @@ export class WsClient {
               // 其余字段如有需要可继续补充
               break;
             case "worldBossBattleStep":
-              event.data.time = new Date().toLocaleString();
+              event.data.time = getTime();
               this.battleSteps.push(event.data);
               // 仅保留最新 20 条
               if (this.battleSteps.length > 20) {
@@ -92,8 +92,8 @@ export class WsClient {
       };
 
       ws.onclose = (ev) => {
-        console.log(new Date().toLocaleString(), this.username, "掉线了", ev);
-        this.logs.push(new Date().toLocaleString() + " " + this.username + "掉线了");
+        console.log(getTime(), this.username, "掉线了", ev);
+        this.logs.push(getTime() + " " + this.username + "掉线了");
         this.status = "offline";
       };
 
@@ -104,17 +104,23 @@ export class WsClient {
   }
   joinBattle() {
     this.send(`42["startWorldBossBattle",{"worldBossId":"${BOSSinfo.worldBossId}","challengeId":"${BOSSinfo.challengeId}"}]`);
-    console.log(new Date().toLocaleString(), this.username, "准备进入世界boss战斗", BOSSinfo.challengeId);
-    this.logs.push(new Date().toLocaleString() + " " + this.username + "准备进入世界boss战斗" + BOSSinfo.challengeId);
+    console.log(getTime(), this.username, "准备进入世界boss战斗:", BOSSinfo.bossName);
+    this.logs.push(getTime() + " " + this.username + "准备进入世界boss战斗:" + BOSSinfo.bossName);
   }
   formatBattleSteps() {
     const battleSteps = this.battleSteps.map((step: any) => {
-      let conditionalEffects = "";
-      for (let i = 0; i < step.conditionalEffects.length; i++) {
-        const element = step.conditionalEffects[i];
-        conditionalEffects += ` ${element.name}|`;
-      }
-      const log = ` ${step.time} ${this.username}   ${conditionalEffects} 造成了${step.damage}点伤害`;
+      const temp = {
+        time: step.time,
+        username: this.username,
+        conditionalEffects: step.conditionalEffects ? step.conditionalEffects.map((effect: any) => effect.name) : [],
+        damage: step.damage,
+        cHP: step.currentEnemyHP,
+        mHP: step.enemyHPMax,
+        isCrit: step.isCrit,
+        isMiss: step.isMiss,
+      };
+      const log = [temp.time, temp.username, temp.conditionalEffects, temp.damage, temp.cHP, temp.mHP, temp.isCrit, temp.isMiss];
+
       return log;
     });
     return battleSteps;

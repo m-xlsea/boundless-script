@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { loginApi, stopconnectApi } from "./apis";
-
+import { NPopover } from "naive-ui";
 const username = ref("");
 const password = ref("");
 const isLogin = ref(false);
@@ -135,10 +135,10 @@ const createLog = (log: string) => {
 </script>
 
 <template>
-  <div style="width: 400px; margin: 0 auto">
+  <div style="width: 100%; margin: 0 auto; height: 100%">
     <div v-if="!isLogin">
       <div>登录</div>
-      <div style="width: 100%; display: flex; flex-direction: column; gap: 10px">
+      <div style="width: 300px; display: flex; flex-direction: column; gap: 10px">
         <input type="text" v-model="username" />
         <input type="password" v-model="password" />
         <button @click="login">登录</button>
@@ -148,14 +148,21 @@ const createLog = (log: string) => {
       <div>登录成功</div>
       <button @click="stopconnect">停止挂机并退出</button>
       <div>战斗日志</div>
-      <div style="word-wrap: break-word; width: 100%; height: 500px; overflow-y: auto">
-        <div v-for="(log, index) in battleSteps" :key="index" style="word-wrap: break-word; width: 100%; overflow-y: auto">
-          {{ log }}
+      <!--     const log = [temp.time, temp.username, temp.conditionalEffects, temp.damage, temp.cHP, temp.mHP, temp.isCrit, temp.isMiss]; -->
+      <div style="word-wrap: break-word; width: 100%; height: 30%; overflow-y: auto">
+        <div v-for="(log, index) in battleSteps as any" :key="index" style="word-wrap: break-word; width: 100%; overflow-y: auto">
+          <n-popover trigger="hover">
+            <template #trigger>
+              {{ log[0] }} {{ log[1] }}造成了 {{ log[3] }}伤害 {{ log[6] ? "暴击" : "" }} {{ log[7] ? "闪避了" : "" }} boss还剩
+              {{ log[4] && log[5] ? Math.round((log[4] / log[5]) * 100) + "%" : "" }}
+            </template>
+            {{ log[2] }}
+          </n-popover>
         </div>
       </div>
     </div>
     <div>日志</div>
-    <div style="word-wrap: break-word; width: 100%; height: 500px; overflow-y: auto">
+    <div style="word-wrap: break-word; width: 100%; height: 30%; overflow-y: auto">
       <div v-for="(log, index) in logs" :key="index" style="word-wrap: break-word; width: 100%">
         {{ log }}
       </div>

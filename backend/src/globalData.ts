@@ -11,9 +11,7 @@ export const BOSSinfo = {
 export const leaderboard = {
   leaderboard: [],
 };
-export function parseSocketIoEvent(
-  msg: string
-): { event: string; data: any } | null {
+export function parseSocketIoEvent(msg: string): { event: string; data: any } | null {
   // 只处理形如 42["event", {...}] 的文本帧
   const i = msg.indexOf("[");
   if (i === -1) return null;
@@ -27,12 +25,12 @@ export function parseSocketIoEvent(
   }
 }
 const findBossAndJoin = (bossId: string) => {
-  const findUsefulWs = Array.from(UserInfo.values()).find(
-    (ws) => ws.status === "online"
-  );
+  const findUsefulWs = Array.from(UserInfo.values()).find((ws) => ws.status === "online");
   if (findUsefulWs) {
-    findUsefulWs.send(
-      `42["startWorldBossBattle",{"worldBossId":"${bossId}","challengeId":"${BOSSinfo.challengeId}"}]`
-    );
+    findUsefulWs.send(`42["startWorldBossBattle",{"worldBossId":"${bossId}","challengeId":"${BOSSinfo.challengeId}"}]`);
   }
+};
+//生成时间 hh:mm:ss
+export const getTime = () => {
+  return new Date().toLocaleTimeString();
 };
