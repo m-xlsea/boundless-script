@@ -16,9 +16,10 @@ const { message } = createDiscreteApi(["message", "dialog", "notification", "loa
 
 const formRef = ref();
 const retryCount = ref(0);
-const isLogin = ref(false);
+const isLogin = ref(true);
 const isStart = ref(false);
 const isStop = ref(false);
+const isError = ref(false);
 const autoLogin = ref(false);
 const logIntervalTime = ref(5000);
 const logIntervalOptions = ref([
@@ -115,7 +116,7 @@ function sendLogEnent() {
 function websocketReconnect() {
   setTimeout(() => {
     if (retryCount.value < maxRetryCount.value || maxRetryCount.value === -1) {
-      retryCount.value++;
+      retryCount.value = retryCount.value + 1;
       initWebSocket();
     } else {
       websocket = null;
@@ -125,12 +126,13 @@ function websocketReconnect() {
       isStart.value = false;
       message.error("websocket 重连失败，已达最大重连次数");
     }
-  }, 3000);
+  }, 5000);
 }
 
 function websocketOnOpen() {
   websocket.onopen = () => {
     retryCount.value = 0;
+    isError.value = false;
     message.success("websocket 连接成功");
     websocket.send(
       JSON.stringify({
@@ -179,10 +181,12 @@ function websocketOnClose() {
     console.warn("websocket 断开连接", e);
     message.warning("websocket 断开连接");
     clearInterval(logInterval);
-    isStart.value = false;
-    if (!isStop.value) {
+    isError.value = false;
+    if (!isStop.value && !isError.value) {
       isStop.value = false;
       websocketReconnect();
+    } else {
+      isStop.value = false;
     }
   };
 }
@@ -191,6 +195,7 @@ function websocketOnError() {
   websocket.onclose = (e) => {
     console.warn("websocket 连接失败", e);
     message.warning("websocket 连接失败");
+    isError.value = true;
     websocketReconnect();
   };
 }
@@ -262,12 +267,7 @@ watch(logIntervalTime, () => {
             <NInput v-model:value="model.username" placeholder="请输入用户名" />
           </NFormItem>
           <NFormItem label="密码" path="password">
-            <NInput
-              v-model:value="model.password"
-              type="password"
-              show-password-on="click"
-              placeholder="请输入密码"
-            />
+            <NInput v-model:value="model.password" type="password" show-password-on="click" placeholder="请输入密码" />
           </NFormItem>
         </NForm>
         <NCheckbox class="mb-16px" v-model:checked="autoLogin">自动登录</NCheckbox>
@@ -295,23 +295,15 @@ watch(logIntervalTime, () => {
       </div>
       <NCard title="战斗日志" class="h-full flex-1">
         <div v-if="battleLog.length > 0" class="h-30vh overflow-auto scrollbar">
-          <NPopover
-            :disabled="!item[2].length"
-            class="mb-5px"
-            v-for="item in battleLog"
-            :key="item.key"
-            placement="top-start"
-            trigger="click"
-          >
+          <NPopover :disabled="!item[2].length" class="mb-5px" v-for="item in battleLog" :key="item.key"
+            placement="top-start" trigger="click">
             <template #trigger>
               <div>
                 <span> {{ item[0] }}</span>
                 <span class="ml-5px"> {{ item[1] }}</span>
                 <span class="ml-5px">造成了 {{ item[3] }} 点伤害</span>
-                <span class="ml-5px"
-                  >boss 剩余 {{ item[4] }}({{ ((item[4] / item[5]) * 100).toFixed(2) }}%)
-                  点血量</span
-                >
+                <span class="ml-5px">boss 剩余 {{ item[4] }}({{ ((item[4] / item[5]) * 100).toFixed(2) }}%)
+                  点血量</span>
               </div>
             </template>
             {{ item[2] }}
@@ -357,18 +349,16 @@ watch(logIntervalTime, () => {
 }
 
 .rainbow-text {
-  background: linear-gradient(
-    90deg,
-    #ff0000,
-    #ff8c00,
-    #ffd700,
-    #32cd32,
-    #00bfff,
-    #4169e1,
-    #8a2be2,
-    #ff1493,
-    #ff0000
-  );
+  background: linear-gradient(90deg,
+      #ff0000,
+      #ff8c00,
+      #ffd700,
+      #32cd32,
+      #00bfff,
+      #4169e1,
+      #8a2be2,
+      #ff1493,
+      #ff0000);
   background-size: 200% 100%;
   background-clip: text;
   -webkit-background-clip: text;
