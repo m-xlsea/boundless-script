@@ -1,6 +1,10 @@
 # 依赖文件
 node_modules/
 **/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun.lockb
 
 # 构建输出
 dist/
@@ -33,6 +37,19 @@ pids
 .env.development.local
 .env.test.local
 .env.production.local
+
+# 敏感配置文件
+config/secrets.json
+config/private.json
+*.key
+*.pem
+*.p12
+*.pfx
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
 
 # IDE 文件
 .vscode/
