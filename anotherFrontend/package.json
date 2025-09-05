@@ -1,0 +1,20 @@
+{
+  "name": "boundless-script",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.18"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "naive-ui": "^2.42.0",
+    "unocss": "^66.5.0",
+    "vite": "^7.1.2"
+  }
+}
