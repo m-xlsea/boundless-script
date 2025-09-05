@@ -33,7 +33,7 @@ export class StartupService {
 
         console.log(`🔍 处理用户: ${userData.username} (状态: ${userData.status})`);
 
-        if (userData.status === "online") {
+        if (userData.stopBattle === false) {
           // 之前是在线状态，尝试重新连接
           const reconnected = await this.attemptReconnectUser(userId, userData);
           if (reconnected) {
@@ -42,7 +42,10 @@ export class StartupService {
           } else {
             // 重连失败，设置为离线
             await UserDataService.updateUserStatus(userId, "offline");
-            await UserDataService.addLog(userId, getTime() + " " + userData.username + " 启动时重连失败，设为离线");
+            await UserDataService.addLog(
+              userId,
+              getTime() + " " + userData.username + " 启动时重连失败，设为离线"
+            );
             offlineCount++;
             console.log(`❌ 用户 ${userData.username} 重连失败，设为离线`);
           }
@@ -97,7 +100,10 @@ export class StartupService {
       userData.token = loginRes.token;
       userData.status = "online";
       await UserDataService.saveUserData(userId, userData);
-      await UserDataService.addLog(userId, getTime() + " " + userData.username + " 启动时自动重连成功");
+      await UserDataService.addLog(
+        userId,
+        getTime() + " " + userData.username + " 启动时自动重连成功"
+      );
 
       // 创建WebSocket连接
       const wsClient = new WsClient(userId, loginRes.token);
