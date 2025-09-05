@@ -18,6 +18,8 @@ const formRef = ref();
 const retryCount = ref(0);
 const isLogin = ref(false);
 const isStart = ref(false);
+const isStop = ref(false);
+const isError = ref(false);
 const autoLogin = ref(false);
 const logIntervalTime = ref(5000);
 const logIntervalOptions = ref([
@@ -38,6 +40,13 @@ const logKeepCountOptions = ref([
   { label: "100条", value: 100 },
   { label: "500条", value: 500 },
   { label: "1000条", value: 1000 },
+]);
+const maxRetryCount = ref(3);
+const maxRetryCountOptions = ref([
+  { label: "3次", value: 3 },
+  { label: "5次", value: 5 },
+  { label: "10次", value: 10 },
+  { label: "无限重连", value: -1 },
 ]);
 const battleLog = ref([]);
 const worldLog = ref([]);
@@ -106,8 +115,8 @@ function sendLogEnent() {
 
 function websocketReconnect() {
   setTimeout(() => {
-    if (retryCount.value < 3) {
-      retryCount.value++;
+    if (retryCount.value < maxRetryCount.value || maxRetryCount.value === -1) {
+      retryCount.value = retryCount.value + 1;
       initWebSocket();
     } else {
       websocket = null;
@@ -117,12 +126,13 @@ function websocketReconnect() {
       isStart.value = false;
       message.error("websocket 重连失败，已达最大重连次数");
     }
-  }, 3000);
+  }, 5000);
 }
 
 function websocketOnOpen() {
   websocket.onopen = () => {
     retryCount.value = 0;
+    isError.value = false;
     message.success("websocket 连接成功");
     websocket.send(
       JSON.stringify({
@@ -149,7 +159,7 @@ function websocketOnMessage() {
       });
       worldLog.value = worldLog.value.reverse();
       if (worldLog.value.length > logKeepCount.value) {
-        worldLog.value = worldLog.value.slice(100, worldLog.value.length);
+        worldLog.value = worldLog.value.slice(logKeepCount.value, worldLog.value.length);
       }
       return;
     }
@@ -160,7 +170,7 @@ function websocketOnMessage() {
       });
       battleLog.value = battleLog.value.reverse();
       if (battleLog.value.length > logKeepCount.value) {
-        battleLog.value = battleLog.value.slice(100, battleLog.value.length);
+        battleLog.value = battleLog.value.slice(logKeepCount.value, battleLog.value.length);
       }
     }
   };
@@ -171,7 +181,13 @@ function websocketOnClose() {
     console.warn("websocket 断开连接", e);
     message.warning("websocket 断开连接");
     clearInterval(logInterval);
-    isStart.value = false;
+    isError.value = false;
+    if (!isStop.value && !isError.value) {
+      isStop.value = false;
+      websocketReconnect();
+    } else {
+      isStop.value = false;
+    }
   };
 }
 
@@ -179,6 +195,7 @@ function websocketOnError() {
   websocket.onclose = (e) => {
     console.warn("websocket 连接失败", e);
     message.warning("websocket 连接失败");
+    isError.value = true;
     websocketReconnect();
   };
 }
@@ -218,7 +235,7 @@ async function handleStop() {
   websocket = null;
   clearInterval(logInterval);
   isStart.value = false;
-
+  isStop.value = true;
   message.success(res.message);
 }
 
@@ -250,12 +267,7 @@ watch(logIntervalTime, () => {
             <NInput v-model:value="model.username" placeholder="请输入用户名" />
           </NFormItem>
           <NFormItem label="密码" path="password">
-            <NInput
-              v-model:value="model.password"
-              type="password"
-              show-password-on="click"
-              placeholder="请输入密码"
-            />
+            <NInput v-model:value="model.password" type="password" show-password-on="click" placeholder="请输入密码" />
           </NFormItem>
         </NForm>
         <NCheckbox class="mb-16px" v-model:checked="autoLogin">自动登录</NCheckbox>
@@ -272,6 +284,10 @@ watch(logIntervalTime, () => {
           <span>日志保留条数：</span>
           <NSelect class="w-120px" v-model:value="logKeepCount" :options="logKeepCountOptions" />
         </div>
+        <div class="flex justify-start items-center gap-3px">
+          <span>重连次数：</span>
+          <NSelect class="w-120px" v-model:value="maxRetryCount" :options="maxRetryCountOptions" />
+        </div>
         <NButton v-if="!isStart" type="primary" @click="handleStart">开始挂机</NButton>
         <NButton v-if="isStart" type="error" @click="handleStop">停止挂机</NButton>
         <NButton v-if="!isStart" type="error" @click="handleLogout">退出登录</NButton>
@@ -279,23 +295,15 @@ watch(logIntervalTime, () => {
       </div>
       <NCard title="战斗日志" class="h-full flex-1">
         <div v-if="battleLog.length > 0" class="h-30vh overflow-auto scrollbar">
-          <NPopover
-            :disabled="!item[2].length"
-            class="mb-5px"
-            v-for="item in battleLog"
-            :key="item.key"
-            placement="top-start"
-            trigger="click"
-          >
+          <NPopover :disabled="!item[2].length" class="mb-5px" v-for="item in battleLog" :key="item.key"
+            placement="top-start" trigger="click">
             <template #trigger>
               <div>
                 <span> {{ item[0] }}</span>
                 <span class="ml-5px"> {{ item[1] }}</span>
                 <span class="ml-5px">造成了 {{ item[3] }} 点伤害</span>
-                <span class="ml-5px"
-                  >boss 剩余 {{ item[4] }}({{ ((item[4] / item[5]) * 100).toFixed(2) }}%)
-                  点血量</span
-                >
+                <span class="ml-5px">boss 剩余 {{ item[4] }}({{ ((item[4] / item[5]) * 100).toFixed(2) }}%)
+                  点血量</span>
               </div>
             </template>
             {{ item[2] }}
@@ -341,18 +349,16 @@ watch(logIntervalTime, () => {
 }
 
 .rainbow-text {
-  background: linear-gradient(
-    90deg,
-    #ff0000,
-    #ff8c00,
-    #ffd700,
-    #32cd32,
-    #00bfff,
-    #4169e1,
-    #8a2be2,
-    #ff1493,
-    #ff0000
-  );
+  background: linear-gradient(90deg,
+      #ff0000,
+      #ff8c00,
+      #ffd700,
+      #32cd32,
+      #00bfff,
+      #4169e1,
+      #8a2be2,
+      #ff1493,
+      #ff0000);
   background-size: 200% 100%;
   background-clip: text;
   -webkit-background-clip: text;
