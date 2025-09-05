@@ -14,7 +14,10 @@ const wsUserMap = new Map<any, string>();
 
 const getNPCtoken = async () => {
   try {
-    const res = (await post("https://boundless.wenzi.games/api/auth/login", { username: "andiliba1", password: "zsm85887823" })) as any;
+    const res = (await post("https://boundless.wenzi.games/api/auth/login", {
+      username: "NPC",
+      password: "NPC123456",
+    })) as any;
     if (res.error) {
       console.log("获取NPC token失败:", res.error);
       return {
@@ -218,12 +221,18 @@ const app = new Elysia()
       pattern: "*/1 * * * * *",
       async run() {
         try {
-          const res: any = await get("https://boundless.wenzi.games/api/worldboss/current", { Authorization: "Bearer " + NPCtoken });
+          const res: any = await get("https://boundless.wenzi.games/api/worldboss/current", {
+            Authorization: "Bearer " + NPCtoken,
+          });
 
           if (res.boss != null && res.boss._id != BOSSinfo.worldBossId) {
             BOSSinfo.worldBossId = res.boss._id;
             console.log("更换boss", BOSSinfo.worldBossId);
-            const challengeRes: any = await post(`https://boundless.wenzi.games/api/worldboss/${BOSSinfo.worldBossId}/challenge`, {}, { Authorization: "Bearer " + NPCtoken });
+            const challengeRes: any = await post(
+              `https://boundless.wenzi.games/api/worldboss/${BOSSinfo.worldBossId}/challenge`,
+              {},
+              { Authorization: "Bearer " + NPCtoken }
+            );
             if (challengeRes.success) {
               BOSSinfo.challengeId = challengeRes.challengeId;
               BOSSinfo.bossName = res.boss.name;
@@ -296,7 +305,10 @@ const app = new Elysia()
               userData.token = res.token;
               userData.status = "online";
               await UserDataService.saveUserData(userId, userData);
-              await UserDataService.addLog(userId, getTime() + " " + userData.username + "重新连接ws");
+              await UserDataService.addLog(
+                userId,
+                getTime() + " " + userData.username + "重新连接ws"
+              );
 
               // 创建新的WebSocket连接
               const wsClient = new WsClient(userId, res.token);
@@ -332,7 +344,11 @@ const app = new Elysia()
           onlineUserIds.forEach((userId) => {
             const wsConnection = WSConnectionManager.getConnection(userId);
             if (wsConnection) {
-              wsConnection.send(`42["battleHeartbeat",{"challengeId":"${BOSSinfo.challengeId}","battleType":"worldboss","clientTimestamp":${new Date().getTime()},"connectionQuality":"good"}]`);
+              wsConnection.send(
+                `42["battleHeartbeat",{"challengeId":"${
+                  BOSSinfo.challengeId
+                }","battleType":"worldboss","clientTimestamp":${new Date().getTime()},"connectionQuality":"good"}]`
+              );
             }
           });
         } catch (error) {

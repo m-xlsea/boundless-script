@@ -11,8 +11,6 @@ const isStart = ref(false);
 const autoLogin = ref(false);
 const logIntervalTime = ref(5000);
 const logIntervalOptions = ref([
-  { label: "1秒", value: 1000 },
-  { label: "3秒", value: 3000 },
   { label: "5秒", value: 5000 },
   { label: "10秒", value: 10000 },
   { label: "15秒", value: 15000 },
@@ -25,6 +23,8 @@ const logIntervalOptions = ref([
 ]);
 const logKeepCount = ref(100);
 const logKeepCountOptions = ref([
+  { label: "20条", value: 20 },
+  { label: "50条", value: 50 },
   { label: "100条", value: 100 },
   { label: "500条", value: 500 },
   { label: "1000条", value: 1000 },
@@ -124,6 +124,11 @@ function websocketOnMessage() {
     const data = JSON.parse(e.data);
     if (data.event === "log") {
       worldLog.value = Array.from(new Set(worldLog.value.concat(data.data)));
+      worldLog.value.sort((a, b) => {
+        const aTime = a.includes("PM") ? `${a.split("PM")[0]}PM` : `${a.split("AM")[0]}AM`;
+        const bTime = b.includes("PM") ? `${b.split("PM")[0]}PM` : `${b.split("AM")[0]}AM`;
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
+      });
       worldLog.value = worldLog.value.reverse();
       if (worldLog.value.length > logKeepCount) {
         worldLog.value = worldLog.value.slice(100, worldLog.value.length);
@@ -132,6 +137,9 @@ function websocketOnMessage() {
     }
     if (data.event === "battlelog") {
       battleLog.value = Array.from(new Set(battleLog.value.concat(data.data)));
+      battleLog.value.sort((a, b) => {
+        return new Date(b[0]).getTime() - new Date(a[0]).getTime();
+      });
       battleLog.value = battleLog.value.reverse();
       if (battleLog.value.length > logKeepCount) {
         battleLog.value = battleLog.value.slice(100, battleLog.value.length);
@@ -260,9 +268,7 @@ watch(logIntervalTime, () => {
       </NCard>
     </div>
   </div>
-  <div style="position: fixed; bottom: 0; left: 0; right: 0; text-align: center; color: #999; font-size: 12px; padding: 10px 0">
-    感谢 <span class="glowing-text">马铃薯头</span> 提供的前端代码！
-  </div>
+  <div class="fixed bottom-0 left-0 right-0 text-center text-gray-500 text-sm">感谢 <span class="rainbow-text">马铃薯头</span> 提供的前端代码!</div>
 </template>
 
 <style scoped>
@@ -291,19 +297,26 @@ watch(logIntervalTime, () => {
   }
 }
 
-.glowing-text {
-  color: #fff;
+.rainbow-text {
+  background: linear-gradient(90deg, #ff0000, #ff8c00, #ffd700, #32cd32, #00bfff, #4169e1, #8a2be2, #ff1493, #ff0000);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   font-weight: bold;
-  text-shadow: 0 0 5px #00f5ff, 0 0 10px #00f5ff, 0 0 15px #00f5ff, 0 0 20px #00f5ff, 0 0 25px #00f5ff, 0 0 30px #00f5ff, 0 0 35px #00f5ff;
-  animation: glow 2s ease-in-out infinite alternate;
+  display: inline-block;
+  animation: rainbow-shift 3s ease-in-out infinite;
 }
 
-@keyframes glow {
-  from {
-    text-shadow: 0 0 5px #00f5ff, 0 0 10px #00f5ff, 0 0 15px #00f5ff, 0 0 20px #00f5ff, 0 0 25px #00f5ff, 0 0 30px #00f5ff, 0 0 35px #00f5ff;
+@keyframes rainbow-shift {
+  0% {
+    background-position: 0% 50%;
   }
-  to {
-    text-shadow: 0 0 10px #ff6b6b, 0 0 20px #ff6b6b, 0 0 30px #ff6b6b, 0 0 40px #ff6b6b, 0 0 50px #ff6b6b, 0 0 60px #ff6b6b, 0 0 70px #ff6b6b;
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
   }
 }
 </style>
