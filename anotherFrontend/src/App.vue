@@ -8,6 +8,7 @@ const formRef = ref();
 const retryCount = ref(0);
 const isLogin = ref(false);
 const isStart = ref(false);
+const isStop = ref(false);
 const autoLogin = ref(false);
 const logIntervalTime = ref(5000);
 const logIntervalOptions = ref([
@@ -28,6 +29,13 @@ const logKeepCountOptions = ref([
   { label: "100条", value: 100 },
   { label: "500条", value: 500 },
   { label: "1000条", value: 1000 },
+]);
+const maxRetryCount = ref(3);
+const maxRetryCountOptions = ref([
+  { label: "3次", value: 3 },
+  { label: "5次", value: 5 },
+  { label: "10次", value: 10 },
+  { label: "无限重连", value: -1 },
 ]);
 const battleLog = ref([]);
 const worldLog = ref([]);
@@ -93,7 +101,7 @@ function sendLogEnent() {
 
 function websocketReconnect() {
   setTimeout(() => {
-    if (retryCount.value < 3) {
+    if (retryCount.value < maxRetryCount.value || maxRetryCount.value === -1) {
       retryCount.value++;
       initWebSocket();
     } else {
@@ -131,7 +139,7 @@ function websocketOnMessage() {
       });
       worldLog.value = worldLog.value.reverse();
       if (worldLog.value.length > logKeepCount.value) {
-        worldLog.value = worldLog.value.slice(100, worldLog.value.length);
+        worldLog.value = worldLog.value.slice(logKeepCount.value, worldLog.value.length);
       }
       return;
     }
@@ -142,7 +150,7 @@ function websocketOnMessage() {
       });
       battleLog.value = battleLog.value.reverse();
       if (battleLog.value.length > logKeepCount.value) {
-        battleLog.value = battleLog.value.slice(100, battleLog.value.length);
+        battleLog.value = battleLog.value.slice(logKeepCount.value, battleLog.value.length);
       }
     }
   };
@@ -154,6 +162,10 @@ function websocketOnClose() {
     message.warning("websocket 断开连接");
     clearInterval(logInterval);
     isStart.value = false;
+    if (!isStop.value) {
+      isStop.value = false;
+      websocketReconnect();
+    }
   };
 }
 
@@ -197,7 +209,7 @@ async function handleStop() {
   websocket = null;
   clearInterval(logInterval);
   isStart.value = false;
-
+  isStop.value = true;
   message.success(res.message);
 }
 
@@ -245,6 +257,10 @@ watch(logIntervalTime, () => {
         <div class="flex justify-start items-center gap-3px">
           <span>日志保留条数：</span>
           <NSelect class="w-120px" v-model:value="logKeepCount" :options="logKeepCountOptions" />
+        </div>
+        <div class="flex justify-start items-center gap-3px">
+          <span>重连次数：</span>
+          <NSelect class="w-120px" v-model:value="maxRetryCount" :options="maxRetryCountOptions" />
         </div>
         <NButton v-if="!isStart" type="primary" @click="handleStart">开始挂机</NButton>
         <NButton v-if="isStart" type="error" @click="handleStop">停止挂机</NButton>
