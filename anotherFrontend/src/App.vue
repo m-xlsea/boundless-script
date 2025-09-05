@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted } from "vue";
-import { NCard, NForm, NFormItem, NInput, NButton, NSelect, createDiscreteApi, NCheckbox } from "naive-ui";
+import { NCard, NForm, NFormItem, NInput, NButton, NSelect, createDiscreteApi, NCheckbox, NPopover } from "naive-ui";
 
 const { message } = createDiscreteApi(["message", "dialog", "notification", "loadingBar", "modal"]);
 
@@ -130,7 +130,7 @@ function websocketOnMessage() {
         return new Date(bTime).getTime() - new Date(aTime).getTime();
       });
       worldLog.value = worldLog.value.reverse();
-      if (worldLog.value.length > logKeepCount) {
+      if (worldLog.value.length > logKeepCount.value) {
         worldLog.value = worldLog.value.slice(100, worldLog.value.length);
       }
       return;
@@ -141,7 +141,7 @@ function websocketOnMessage() {
         return new Date(b[0]).getTime() - new Date(a[0]).getTime();
       });
       battleLog.value = battleLog.value.reverse();
-      if (battleLog.value.length > logKeepCount) {
+      if (battleLog.value.length > logKeepCount.value) {
         battleLog.value = battleLog.value.slice(100, battleLog.value.length);
       }
     }
@@ -253,12 +253,18 @@ watch(logIntervalTime, () => {
       </div>
       <NCard title="战斗日志" class="h-full flex-1">
         <div v-if="battleLog.length > 0" class="h-30vh overflow-auto scrollbar">
-          <div class="mb-5px" v-for="item in battleLog" :key="item.key">
-            <span> {{ item[0] }}</span>
-            <span class="ml-5px"> {{ item[1] }}</span>
-            <span class="ml-5px">造成了 {{ item[3] }} 点伤害</span>
-            <span class="ml-5px">boss 剩余 {{ item[4] }}({{ ((item[4] / item[5]) * 100).toFixed(2) }}%) 点血量</span>
-          </div>
+          <NPopover :disabled="!item[2].length" class="mb-5px" v-for="item in battleLog" :key="item.key"
+            placement="top-start" trigger="click">
+            <template #trigger>
+              <div>
+                <span> {{ item[0] }}</span>
+                <span class="ml-5px"> {{ item[1] }}</span>
+                <span class="ml-5px">造成了 {{ item[3] }} 点伤害</span>
+                <span class="ml-5px">boss 剩余 {{ item[4] }}({{ ((item[4] / item[5]) * 100).toFixed(2) }}%) 点血量</span>
+              </div>
+            </template>
+            {{ item[2] }}
+          </NPopover>
         </div>
       </NCard>
       <NCard title="世界日志" class="h-full flex-1">
@@ -268,7 +274,8 @@ watch(logIntervalTime, () => {
       </NCard>
     </div>
   </div>
-  <div class="fixed bottom-0 left-0 right-0 text-center text-gray-500 text-sm">感谢 <span class="rainbow-text">马铃薯头</span> 提供的前端代码!</div>
+  <div class="fixed bottom-0 left-0 right-0 text-center text-gray-500 text-sm">感谢 <span class="rainbow-text">马铃薯头</span>
+    提供的前端代码!</div>
 </template>
 
 <style scoped>
@@ -312,9 +319,11 @@ watch(logIntervalTime, () => {
   0% {
     background-position: 0% 50%;
   }
+
   50% {
     background-position: 100% 50%;
   }
+
   100% {
     background-position: 0% 50%;
   }
