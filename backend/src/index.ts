@@ -15,8 +15,8 @@ const wsUserMap = new Map<any, string>();
 const getNPCtoken = async () => {
   try {
     const res = (await post("https://boundless.wenzi.games/api/auth/login", {
-      username: "NPC",
-      password: "NPC123456",
+      username: process.env.NPC_USERNAME,
+      password: process.env.NPC_PASSWORD,
     })) as any;
     if (res.error) {
       console.log("获取NPC token失败:", res.error);
@@ -55,11 +55,20 @@ const initializeServer = async () => {
   console.log("✅ 服务器初始化完成");
 };
 // 简单的 Elysia HTTP + WS 服务器
-const app = new Elysia()
+const app = new Elysia({
+  websocket: {
+    perMessageDeflate: {
+      compress: true,
+      decompress: true,
+    },
+  },
+})
   .use(cors())
   .get("/", () => "Hello Elysia")
   .get("/status", async () => {
     const stats = await StartupService.getRecoveryStats();
+    const connectionStats = WSConnectionManager.getAllConnectionStats();
+
     return {
       message: "服务器运行正常",
       stats: {
@@ -68,6 +77,14 @@ const app = new Elysia()
         offlineUsers: stats.offlineUsers,
         activeConnections: stats.activeConnections,
       },
+      connectionStats: connectionStats.map(
+        (stat) =>
+          `${stat.userId}时长${stat.connectionDuration}秒,请求数${stat.requestCount}，每秒请求数${
+            stat.connectionDuration > 0
+              ? (stat.requestCount / stat.connectionDuration).toFixed(2)
+              : "0.00"
+          }`
+      ),
       timestamp: new Date().toISOString(),
     };
   })
@@ -173,6 +190,13 @@ const app = new Elysia()
     message: async (ws, message: any) => {
       const event = message.event;
       const data = message.data;
+
+      // 对所有消息进行计数
+      const username = wsUserMap.get(ws.id);
+      if (username) {
+        WSConnectionManager.incrementRequestCount(username);
+      }
+
       if (event === "connect") {
         const userData = await UserDataService.getUserData(data.username);
         if (!userData || userData.password !== data.password) {
@@ -181,6 +205,8 @@ const app = new Elysia()
         }
         // 保存 WebSocket 和用户名的映射
         wsUserMap.set(ws.id, data.username);
+        // 初始化连接统计
+        WSConnectionManager.initConnectionStats(data.username, userData.username);
         console.log("用户连接:", data.username);
       } else if (event === "battlelog") {
         const username = wsUserMap.get(ws.id);
@@ -191,6 +217,7 @@ const app = new Elysia()
           if (wsConnection) {
             const battleSteps = await wsConnection.formatBattleSteps();
             ws.send(JSON.stringify({ event: "battlelog", data: battleSteps }));
+            wsConnection.tempBattleSteps = [];
           }
         }
       } else if (event === "log") {
@@ -199,6 +226,7 @@ const app = new Elysia()
           const wsConnection = WSConnectionManager.getConnection(username);
           if (wsConnection) {
             const logs = await wsConnection.formatLogs();
+            wsConnection.tempLogs = [];
             ws.send(JSON.stringify({ event: "log", data: logs }));
           }
         }
