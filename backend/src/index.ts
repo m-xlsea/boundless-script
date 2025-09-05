@@ -15,8 +15,8 @@ const wsUserMap = new Map<any, string>();
 const getNPCtoken = async () => {
   try {
     const res = (await post("https://boundless.wenzi.games/api/auth/login", {
-      username: "andiliba2",
-      password: "zsm85887823",
+      username: process.env.NPC_USERNAME,
+      password: process.env.NPC_PASSWORD,
     })) as any;
     if (res.error) {
       console.log("获取NPC token失败:", res.error);

@@ -1,6 +1,16 @@
 <script setup>
 import { ref, watch, onMounted } from "vue";
-import { NCard, NForm, NFormItem, NInput, NButton, NSelect, createDiscreteApi, NCheckbox, NPopover } from "naive-ui";
+import {
+  NCard,
+  NForm,
+  NFormItem,
+  NInput,
+  NButton,
+  NSelect,
+  createDiscreteApi,
+  NCheckbox,
+  NPopover,
+} from "naive-ui";
 
 const { message } = createDiscreteApi(["message", "dialog", "notification", "loadingBar", "modal"]);
 
@@ -57,13 +67,16 @@ onMounted(() => {
 const handleLogin = async () => {
   await formRef.value?.validate();
 
-  const response = await fetch("http://139.196.230.61:3333/login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(model.value),
-  });
+  const response = await fetch(
+    `http://${import.meta.env.VITE_HOST ? import.meta.env.VITE_HOST : "139.196.230.61:3333"}/login`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(model.value),
+    }
+  );
   const res = await response.json();
   if (response.status !== 200) {
     message.error(res.error);
@@ -111,7 +124,12 @@ function websocketOnOpen() {
   websocket.onopen = () => {
     retryCount.value = 0;
     message.success("websocket 连接成功");
-    websocket.send(JSON.stringify({ event: "connect", data: { username: model.value.username, password: model.value.password } }));
+    websocket.send(
+      JSON.stringify({
+        event: "connect",
+        data: { username: model.value.username, password: model.value.password },
+      })
+    );
     sendLogEnent();
     logInterval = setInterval(() => {
       sendLogEnent();
@@ -166,7 +184,7 @@ function websocketOnError() {
 }
 
 function initWebSocket() {
-  websocket = new WebSocket("ws://139.196.230.61:3333/ws");
+  websocket = new WebSocket(`ws://${import.meta.env.VITE_WS_HOST || "139.196.230.61:3333"}/ws`);
   websocketOnOpen();
   websocketOnMessage();
   websocketOnError();
@@ -180,13 +198,16 @@ function handleStart() {
 }
 
 async function handleStop() {
-  const response = await fetch("http://139.196.230.61:3333/stopbattle", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(model.value),
-  });
+  const response = await fetch(
+    `http://${import.meta.env.VITE_WS_HOST || "139.196.230.61:3333"}/stopbattle`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(model.value),
+    }
+  );
   const res = await response.json();
   if (response.status !== 200) {
     message.error(res.error);
@@ -229,7 +250,12 @@ watch(logIntervalTime, () => {
             <NInput v-model:value="model.username" placeholder="请输入用户名" />
           </NFormItem>
           <NFormItem label="密码" path="password">
-            <NInput v-model:value="model.password" type="password" show-password-on="click" placeholder="请输入密码" />
+            <NInput
+              v-model:value="model.password"
+              type="password"
+              show-password-on="click"
+              placeholder="请输入密码"
+            />
           </NFormItem>
         </NForm>
         <NCheckbox class="mb-16px" v-model:checked="autoLogin">自动登录</NCheckbox>
@@ -253,14 +279,23 @@ watch(logIntervalTime, () => {
       </div>
       <NCard title="战斗日志" class="h-full flex-1">
         <div v-if="battleLog.length > 0" class="h-30vh overflow-auto scrollbar">
-          <NPopover :disabled="!item[2].length" class="mb-5px" v-for="item in battleLog" :key="item.key"
-            placement="top-start" trigger="click">
+          <NPopover
+            :disabled="!item[2].length"
+            class="mb-5px"
+            v-for="item in battleLog"
+            :key="item.key"
+            placement="top-start"
+            trigger="click"
+          >
             <template #trigger>
               <div>
                 <span> {{ item[0] }}</span>
                 <span class="ml-5px"> {{ item[1] }}</span>
                 <span class="ml-5px">造成了 {{ item[3] }} 点伤害</span>
-                <span class="ml-5px">boss 剩余 {{ item[4] }}({{ ((item[4] / item[5]) * 100).toFixed(2) }}%) 点血量</span>
+                <span class="ml-5px"
+                  >boss 剩余 {{ item[4] }}({{ ((item[4] / item[5]) * 100).toFixed(2) }}%)
+                  点血量</span
+                >
               </div>
             </template>
             {{ item[2] }}
@@ -274,8 +309,9 @@ watch(logIntervalTime, () => {
       </NCard>
     </div>
   </div>
-  <div class="fixed bottom-0 left-0 right-0 text-center text-gray-500 text-sm">感谢 <span class="rainbow-text">马铃薯头</span>
-    提供的前端代码!</div>
+  <div class="fixed bottom-0 left-0 right-0 text-center text-gray-500 text-sm">
+    感谢 <span class="rainbow-text">马铃薯头</span> 提供的前端代码!
+  </div>
 </template>
 
 <style scoped>
@@ -305,7 +341,18 @@ watch(logIntervalTime, () => {
 }
 
 .rainbow-text {
-  background: linear-gradient(90deg, #ff0000, #ff8c00, #ffd700, #32cd32, #00bfff, #4169e1, #8a2be2, #ff1493, #ff0000);
+  background: linear-gradient(
+    90deg,
+    #ff0000,
+    #ff8c00,
+    #ffd700,
+    #32cd32,
+    #00bfff,
+    #4169e1,
+    #8a2be2,
+    #ff1493,
+    #ff0000
+  );
   background-size: 200% 100%;
   background-clip: text;
   -webkit-background-clip: text;
