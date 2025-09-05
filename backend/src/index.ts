@@ -15,8 +15,8 @@ const wsUserMap = new Map<any, string>();
 const getNPCtoken = async () => {
   try {
     const res = (await post("https://boundless.wenzi.games/api/auth/login", {
-      username: "NPC",
-      password: "NPC123456",
+      username: "andiliba2",
+      password: "zsm85887823",
     })) as any;
     if (res.error) {
       console.log("获取NPC token失败:", res.error);
@@ -55,7 +55,14 @@ const initializeServer = async () => {
   console.log("✅ 服务器初始化完成");
 };
 // 简单的 Elysia HTTP + WS 服务器
-const app = new Elysia()
+const app = new Elysia({
+  websocket: {
+    perMessageDeflate: {
+      compress: true,
+      decompress: true,
+    },
+  },
+})
   .use(cors())
   .get("/", () => "Hello Elysia")
   .get("/status", async () => {
@@ -191,6 +198,7 @@ const app = new Elysia()
           if (wsConnection) {
             const battleSteps = await wsConnection.formatBattleSteps();
             ws.send(JSON.stringify({ event: "battlelog", data: battleSteps }));
+            wsConnection.tempBattleSteps = [];
           }
         }
       } else if (event === "log") {
@@ -199,6 +207,7 @@ const app = new Elysia()
           const wsConnection = WSConnectionManager.getConnection(username);
           if (wsConnection) {
             const logs = await wsConnection.formatLogs();
+            wsConnection.tempLogs = [];
             ws.send(JSON.stringify({ event: "log", data: logs }));
           }
         }

@@ -7,6 +7,8 @@ export class WsClient {
   ws: WebSocket | null = null;
   userId: string;
   status: string;
+  tempBattleSteps: any[] = [];
+  tempLogs: any[] = [];
 
   constructor(userId: string, token: string) {
     this.url = "wss://boundless.wenzi.games/socket.io/?EIO=4&transport=websocket";
@@ -44,10 +46,13 @@ export class WsClient {
 
       ws.onopen = async () => {
         await UserDataService.setStopBattle(this.userId, false);
+
         this.send(`40{"token":"${userData.token}"}`);
         this.status = "online";
         await UserDataService.updateUserStatus(this.userId, "online");
         await UserDataService.addLog(this.userId, getTime() + " " + userData.username + "上线了");
+        this.tempBattleSteps = userData.battleSteps;
+        this.tempLogs = userData.logs;
         setTimeout(() => {
           this.joinBattle();
         }, 1000);
@@ -70,6 +75,7 @@ export class WsClient {
             case "worldBossBattleStep":
               event.data.time = getTime();
               await UserDataService.addBattleStep(this.userId, event.data);
+              this.tempBattleSteps.push(event.data);
               break;
             case "worldBossLeaderboardUpdate":
               leaderboard.leaderboard = event.data;
@@ -98,37 +104,55 @@ export class WsClient {
     } catch (err) {}
   }
   async joinBattle() {
-    this.send(`42["startWorldBossBattle",{"worldBossId":"${BOSSinfo.worldBossId}","challengeId":"${BOSSinfo.challengeId}"}]`);
+    this.send(
+      `42["startWorldBossBattle",{"worldBossId":"${BOSSinfo.worldBossId}","challengeId":"${BOSSinfo.challengeId}"}]`
+    );
     const userData = await UserDataService.getUserData(this.userId);
     if (userData) {
       console.log(getTime(), userData.username, "准备进入世界boss战斗:", BOSSinfo.bossName);
-      await UserDataService.addLog(this.userId, getTime() + " " + userData.username + "准备进入世界boss战斗:" + BOSSinfo.bossName);
+      await UserDataService.addLog(
+        this.userId,
+        getTime() + " " + userData.username + "准备进入世界boss战斗:" + BOSSinfo.bossName
+      );
+      this.tempLogs.push(
+        getTime() + " " + userData.username + "准备进入世界boss战斗:" + BOSSinfo.bossName
+      );
     }
   }
   async formatBattleSteps() {
     const userData = await UserDataService.getUserData(this.userId);
     if (!userData) return [];
 
-    const battleSteps = userData.battleSteps.map((step: any) => {
+    const battleSteps = this.tempBattleSteps.map((step: any) => {
       const temp = {
         time: step.time,
-        username: userData.username,
-        conditionalEffects: step.conditionalEffects ? step.conditionalEffects.map((effect: any) => effect.name) : [],
+        username: this.userId,
+        conditionalEffects: step.conditionalEffects
+          ? step.conditionalEffects.map((effect: any) => effect.name)
+          : [],
         damage: step.damage,
         cHP: step.currentEnemyHP,
         mHP: step.enemyHPMax,
         isCrit: step.isCrit,
         isMiss: step.isMiss,
       };
-      const log = [temp.time, temp.username, temp.conditionalEffects, temp.damage, temp.cHP, temp.mHP, temp.isCrit, temp.isMiss];
+      const log = [
+        temp.time,
+        temp.username,
+        temp.conditionalEffects,
+        temp.damage,
+        temp.cHP,
+        temp.mHP,
+        temp.isCrit,
+        temp.isMiss,
+      ];
 
       return log;
     });
     return battleSteps;
   }
   async formatLogs() {
-    const userData = await UserDataService.getUserData(this.userId);
-    return userData ? userData.logs : [];
+    return this.tempLogs;
   }
   async stopBattleFnc() {
     await UserDataService.setStopBattle(this.userId, true);
