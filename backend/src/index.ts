@@ -67,6 +67,8 @@ const app = new Elysia({
   .get("/", () => "Hello Elysia")
   .get("/status", async () => {
     const stats = await StartupService.getRecoveryStats();
+    const connectionStats = WSConnectionManager.getAllConnectionStats();
+
     return {
       message: "服务器运行正常",
       stats: {
@@ -75,6 +77,14 @@ const app = new Elysia({
         offlineUsers: stats.offlineUsers,
         activeConnections: stats.activeConnections,
       },
+      connectionStats: connectionStats.map(
+        (stat) =>
+          `${stat.userId}时长${stat.connectionDuration}秒,请求数${stat.requestCount}，每秒请求数${
+            stat.connectionDuration > 0
+              ? (stat.requestCount / stat.connectionDuration).toFixed(2)
+              : "0.00"
+          }`
+      ),
       timestamp: new Date().toISOString(),
     };
   })
@@ -180,6 +190,13 @@ const app = new Elysia({
     message: async (ws, message: any) => {
       const event = message.event;
       const data = message.data;
+
+      // 对所有消息进行计数
+      const username = wsUserMap.get(ws.id);
+      if (username) {
+        WSConnectionManager.incrementRequestCount(username);
+      }
+
       if (event === "connect") {
         const userData = await UserDataService.getUserData(data.username);
         if (!userData || userData.password !== data.password) {
@@ -188,6 +205,8 @@ const app = new Elysia({
         }
         // 保存 WebSocket 和用户名的映射
         wsUserMap.set(ws.id, data.username);
+        // 初始化连接统计
+        WSConnectionManager.initConnectionStats(data.username, userData.username);
         console.log("用户连接:", data.username);
       } else if (event === "battlelog") {
         const username = wsUserMap.get(ws.id);
