@@ -34,13 +34,13 @@ export class StartupService {
         console.log(`🔍 处理用户: ${userData.username} (状态: ${userData.status})`);
 
         if (userData.stopBattle === false) {
-          // 之前是在线状态，尝试重新连接
+          // 用户未主动停止战斗，尝试恢复连接
           const reconnected = await this.attemptReconnectUser(userId, userData);
           if (reconnected) {
             reconnectedCount++;
             console.log(`✅ 用户 ${userData.username} 重新连接成功`);
           } else {
-            // 重连失败，设置为离线
+            // 连接恢复失败，标记为离线状态
             await UserDataService.updateUserStatus(userId, "offline");
             await UserDataService.addLog(
               userId,
@@ -50,7 +50,7 @@ export class StartupService {
             console.log(`❌ 用户 ${userData.username} 重连失败，设为离线`);
           }
         } else {
-          // 之前是离线状态，保持离线
+          // 用户已主动停止战斗，保持离线状态不自动连接
           offlineCount++;
           console.log(`📴 用户 ${userData.username} 保持离线状态`);
         }
