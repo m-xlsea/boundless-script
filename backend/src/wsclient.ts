@@ -1,6 +1,7 @@
 import { leaderboard, parseSocketIoEvent, getTime } from "./globalData";
 import { BOSSinfo } from "./globalData";
 import { UserDataService } from "./userDataService";
+import { WSConnectionManager } from "./wsConnectionManager";
 
 export class WsClient {
   private readonly url: string;
@@ -96,6 +97,7 @@ export class WsClient {
         }
         this.status = "offline";
         await UserDataService.updateUserStatus(this.userId, "offline");
+        WSConnectionManager.removeConnection(this.userId);
       };
 
       ws.onerror = (err) => {
