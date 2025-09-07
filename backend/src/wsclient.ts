@@ -52,8 +52,8 @@ export class WsClient {
         this.status = "online";
         await UserDataService.updateUserStatus(this.userId, "online");
         await UserDataService.addLog(this.userId, getTime() + " " + userData.username + "上线了");
-        this.tempBattleSteps = userData.battleSteps;
-        this.tempLogs = userData.logs;
+        this.tempBattleSteps = (userData.battleSteps || []).slice(-20);
+        this.tempLogs = (userData.logs || []).slice(-20);
         setTimeout(() => {
           this.joinBattle();
         }, 1000);
@@ -76,7 +76,7 @@ export class WsClient {
             case "worldBossBattleStep":
               event.data.time = getTime();
               await UserDataService.addBattleStep(this.userId, event.data);
-              this.tempBattleSteps.push(event.data);
+              this.addBattleStep(event.data);
               break;
             case "worldBossLeaderboardUpdate":
               leaderboard.leaderboard = event.data;
@@ -116,7 +116,7 @@ export class WsClient {
         this.userId,
         getTime() + " " + userData.username + "准备进入世界boss战斗:" + BOSSinfo.bossName
       );
-      this.tempLogs.push(
+      this.addLog(
         getTime() + " " + userData.username + "准备进入世界boss战斗:" + BOSSinfo.bossName
       );
     }
@@ -162,5 +162,17 @@ export class WsClient {
     return {
       message: "停止战斗",
     };
+  }
+  addLog(log: string) {
+    this.tempLogs.push(log);
+    if (this.tempLogs.length > 20) {
+      this.tempLogs = this.tempLogs.slice(-20);
+    }
+  }
+  addBattleStep(battleStep: any) {
+    this.tempBattleSteps.push(battleStep);
+    if (this.tempBattleSteps.length > 20) {
+      this.tempBattleSteps = this.tempBattleSteps.slice(-20);
+    }
   }
 }
